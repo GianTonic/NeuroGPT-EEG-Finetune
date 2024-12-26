@@ -8,3 +8,6 @@ torch==2.2.0
 torchinfo==1.8.0
 tqdm==4.66.2
 transformers==4.38.1
+torchvision==0.20.1
+mne_features
+openpyxl

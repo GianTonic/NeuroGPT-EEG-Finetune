@@ -189,7 +189,7 @@ class EmotionDataset(EEGDataset):
 
         self.data_all = []
         for subject_id in ([0,1,2,3,4,5,6,7,8,9]):
-            pruned_path = str("/home/insane/Scrivania/eremus_npz/")
+            pruned_path = str("/home/giovanni/Scrivania/UNIVERSITA/AI/repository/model/recordings_pruned_with_ICA")
             sessions = getPrunedSessions(pruned_path)
             print(len(sessions))
             raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
