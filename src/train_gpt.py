@@ -128,6 +128,12 @@ def train(config: Dict=None) -> Trainer:
         'PretrainedGPT2'
     }, f'{config["architecture"]} is not supported.'
     
+    assert config["dataset"] in {
+        'emotion',
+        'motor_imagery'
+    }, f'{config["dataset"]} is not supported.'
+    
+
     if config['set_seed']:
         random.seed(config["seed"])
         manual_seed(config["seed"])
@@ -139,18 +145,32 @@ def train(config: Dict=None) -> Trainer:
         train_folds, test_folds = cv_split_bci(sorted(os.listdir(downstream_path))[:18])
         train_files = train_folds[config['fold_i']]
         test_files = test_folds[config['fold_i']]
+        if(config["dataset"]=="emotion"):
+            train_dataset = EmotionDataset(train_files, sample_keys=[
+                    'inputs',
+                    'attention_mask'
+                ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
+            # pdb.set_trace()
+            
+            test_dataset = EmotionDataset(test_files, sample_keys=[
+                    'inputs',
+                    'attention_mask'
+                ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
+        if(config["dataset"]=="motor_imagery"):
+            train_files = train_folds[config['fold_i']]
+            test_files = test_folds[config['fold_i']]
 
-        train_dataset = EmotionDataset(train_files, sample_keys=[
-                'inputs',
-                'attention_mask'
-            ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
-        # pdb.set_trace()
-        
-        test_dataset = EmotionDataset(test_files, sample_keys=[
-                'inputs',
-                'attention_mask'
-            ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
-       
+            train_dataset = MotorImageryDataset(train_files, sample_keys=[
+                    'inputs',
+                    'attention_mask'
+                ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
+            # pdb.set_trace()
+            
+            test_dataset = MotorImageryDataset(test_files, sample_keys=[
+                    'inputs',
+                    'attention_mask'
+                ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
+
         validation_dataset = test_dataset
         test_dataset = train_dataset
         
@@ -439,6 +459,15 @@ def get_args() -> argparse.ArgumentParser:
         type=str,
         help='path to training data directory '
              '(default: data/upstream)'
+    )
+
+    parser.add_argument(
+        '--dataset',
+        metavar='DIR',
+        default='motor_imagery',
+        type=str,
+        help='type of dataset'
+             '(default: motor_imagery)'
     )
 
     parser.add_argument(
