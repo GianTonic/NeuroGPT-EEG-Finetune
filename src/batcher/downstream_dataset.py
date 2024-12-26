@@ -191,6 +191,7 @@ class EmotionDataset(EEGDataset):
         for subject_id in ([0,1,2,3,4,5,6,7,8,9]):
             pruned_path = str("/home/insane/Scrivania/eremus_npz/")
             sessions = getPrunedSessions(pruned_path)
+            print(len(sessions))
             raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
             data, _ = raw[:]
             data_dict = {
@@ -290,20 +291,7 @@ class EmotionDataset(EEGDataset):
             print(f"Available data indices: {len(self.data_all)}")
             raise
 
-    def get_labels(self, sub_id):
-        label_path = os.path.join(self.root_path, "true_labels")
-        base_name = os.path.basename(self.filenames[sub_id])
-        sub_name = os.path.splitext(base_name)[0]
-        label_file = os.path.join(label_path, sub_name + ".mat")
-        
-        print(f"Looking for label file: {label_file}")  # Debugging statement
-
-        if not os.path.exists(label_file):
-            raise FileNotFoundError(f"Label file not found: {label_file}")
-
-        labels = loadmat(label_file)["classlabel"]
-        return labels.squeeze() - 1
-
+   
     def get_trials_all(self):
         trials_all = []
         labels_all = []
