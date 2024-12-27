@@ -7,6 +7,8 @@ from scipy.io import loadmat
 from scipy.signal import butter, filtfilt
 from eremus.eremus_utils import getPrunedSessions, sub
 from eremus import gew
+import eremus.preprocessing.preprocessing as pp
+
 import torch
 
 import pandas as pd
@@ -186,14 +188,33 @@ class MotorImageryDataset(EEGDataset):
 class EmotionDataset(EEGDataset):
     def __init__(self, filenames, sample_keys, chunk_len=500, num_chunks=10, ovlp=50, root_path="", gpt_only=True):
         super().__init__(filenames, sample_keys, chunk_len, num_chunks, ovlp, root_path=root_path, gpt_only=gpt_only)
-
+        self.chunk_len = chunk_len
         self.data_all = []
-        for subject_id in ([0,1,2,3,4,5,6,7,8,9]):
-            pruned_path = str("/home/giovanni/Scrivania/UNIVERSITA/AI/repository/model/recordings_pruned_with_ICA")
-            sessions = getPrunedSessions(pruned_path)
-            print(len(sessions))
+        pruned_path = str("/home/insane/Scrivania/eremus_npz/")
+
+        sessions = getPrunedSessions(pruned_path)
+        print(f"Sessions: {sessions}")
+        xls_file = "/home/insane/Scrivania/NeuroGPT-EEG-Finetune/eremus_test.xlsx"
+        eeg_data = pd.read_excel(xls_file)
+        for subject_id in range(0,int(len(sessions)/2)):
+            mean, std, _, _, _ = pp.get_subject_stats(eeg_data, 
+                                              subject_id, 
+                                              pruned_eeg_root_dir=pruned_path+"/", 
+                                              select_single_session=False, 
+                                              return_ch_stats=False)
+            print(Path(pruned_path)/sessions[sub(subject_id)])
+            print(sessions[sub(subject_id)])
             raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
+            # raw_data = raw.get_data()
+            # raw_data = pp.interpolate(raw_data)
+
+            # # compute Z-score over all the file
+            # raw = pp.z_score_norm(raw_data, mean, std)
+
             data, _ = raw[:]
+            # data = raw
+            print(data.shape,raw.annotations.onset,"ssssssssssssss")
+
             data_dict = {
                     's': data,
                     'etyp': raw.annotations.description,
@@ -204,9 +225,7 @@ class EmotionDataset(EEGDataset):
             self.data_all.append(data_dict)
 
         # Debugging: Check structure of data_all
-        print(f"data_all structure: {[type(item) for item in self.data_all]}")
-        # print(f"Example data structure: {self.data_all[0]}")
-
+        
         
         # Load transformation matrix and ensure correct shape
         self.P = np.load("../inputs/tMatrix_value.npy")
@@ -243,15 +262,25 @@ class EmotionDataset(EEGDataset):
     def get_trials_from_single_subj(self, sub_id):
         try:
             raw = self.data_all[sub_id]['s']  # (channels, time)
-           
+            sec=self.data_all[sub_id]['epos']
+            print(sec,"secccccccccccc")
             # print(f"Subject {sub_id} annotations: {events_type}")
             self.xlsx = pd.read_excel("../augmented_eremus.xlsx")
-            filter = self.xlsx["original_index"] == sub_id
+            filter = self.xlsx["subject_id"] == sub_id
             rows=self.xlsx.where(filter).dropna(thresh=1)
+            pruned_path = str("/home/insane/Scrivania/eremus_npz/")
+            sessions = getPrunedSessions(pruned_path)
+            filter2 = rows["filename_pruned"] == sessions[sub(sub_id)]
+            rows=rows.where(filter2).dropna(thresh=1)
             idxs=[]
             for id in rows.iloc[:,0].index:
+                emotion=eval(self.xlsx.iloc[id,11])
+                if(emotion[0]==20 or emotion[0]==21):
+                    continue
                 idxs.append(id)
-            emotions = rows.iloc[:,11]
+                print("id",id)
+            emotions = self.xlsx.iloc[idxs,11]
+            
             labels=[]
             for emotion in emotions: 
                 labels.append(gew.gew_to_hldv4(eval(emotion)))
@@ -259,29 +288,34 @@ class EmotionDataset(EEGDataset):
             
             trials = []
             classes = []
+            i=0
             for j, index in enumerate(idxs):
+                print(j)
                 # try:
                 # Append the label for the current trial
-                classes.append(trial_labels[j])
                 
-                trial_start=int(rows.iloc[j,6]) 
-                trial_stop=trial_start+500
-               
+                print(rows.iloc[j,:])
+                trial_start=int(rows.iloc[j,6])
+                # trial_start=i*384 
+                trial_stop=trial_start+self.chunk_len
+                print(trial_start,trial_stop,trial_labels[j],raw.shape[1],"attenzioneeeeeeeee")
+
                 # Ensure valid interval
-                if trial_stop > raw.shape[1]:
-                    print(f"Invalid trial interval for trial {j}: start={trial_start}, stop={trial_stop}, max={raw.shape[1]}")
-                    continue
+                # if (trial_stop > max_trial) :
+                #     print(f"Invalid trial interval for trial {j}: start={trial_start}, stop={trial_stop}, max={max_trial}")
+                #     continue
 
                 # Extract trial data ensuring correct dimensions
                 trial = raw[:22, trial_start:trial_stop]
-
-                # Check if the trial data has valid length
-                if trial.shape[1] != 500:
-                    print(f"Unexpected trial length for trial {j}, expected {(5.5 - 2) * self.Fs}, got {trial.shape[1]}")
-                    continue
                 print(trial.shape)
+                # Check if the trial data has valid length
+                if trial.shape[1] != self.chunk_len:
+                    print(f"Unexpected trial length for trial {j}, expected {self.chunk_len}, got {trial.shape[1]}")
+                    continue
+                classes.append(trial_labels[j])
                 trials.append(trial)
-               
+                i=i+1
+
             print(f"Total trials loaded from subject {sub_id}: {len(trials)}")
             
             return trials, classes
@@ -296,16 +330,18 @@ class EmotionDataset(EEGDataset):
         trials_all = []
         labels_all = []
         total_num = []
-        print(len(self.data_all))
+     
         for sub_id in range(len(self.data_all)):
             trials, labels = self.get_trials_from_single_subj(sub_id)
             total_num.append(len(trials))
-            
+            if(len(trials)==0):
+                continue
             trials_all.append(np.array(trials))
             labels_all.append(np.array(labels))
 
         print(f"Total number of trials: {total_num}")
-        
+        print(len(trials_all))
+        print(len(labels_all))          
         if trials_all:
             trials_all_arr = np.vstack(trials_all)
             trials_all_arr = self.map2pret(trials_all_arr)

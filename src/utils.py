@@ -40,7 +40,7 @@ def load_pickle(filename):
     start_time = time.time()
     with gzip.open(filename, "rb") as file:
         data = pickle.load(file)
-    print(data)
+   
     end_time = time.time()
     print("Compressed Elapsed time:", end_time - start_time, "seconds")
     
