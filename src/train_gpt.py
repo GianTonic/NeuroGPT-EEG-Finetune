@@ -141,18 +141,19 @@ def train(config: Dict=None) -> Trainer:
     #handles the input part, which are the output from encoder.
     if config["training_style"] == 'decoding':
         downstream_path = config["dst_data_path"]
-      
         train_folds, test_folds = cv_split_bci(sorted(os.listdir(downstream_path))[:18])
         train_files = train_folds[config['fold_i']]
         test_files = test_folds[config['fold_i']]
         if(config["dataset"]=="emotion"):
-            train_dataset = EmotionDataset(train_files, sample_keys=[
+            path_xlsx_train=config["path_xlsx_train"]
+            path_xlsx_test=config["path_xlsx_test"]
+            train_dataset = EmotionDataset(path_xlsx_train, sample_keys=[
                     'inputs',
                     'attention_mask'
                 ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
             # pdb.set_trace()
             
-            test_dataset = EmotionDataset(test_files, sample_keys=[
+            test_dataset = EmotionDataset(path_xlsx_test, sample_keys=[
                     'inputs',
                     'attention_mask'
                 ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
@@ -470,6 +471,22 @@ def get_args() -> argparse.ArgumentParser:
              '(default: motor_imagery)'
     )
 
+    parser.add_argument(
+        '--path_xlsx_train',
+        metavar='DIR',
+        default='./train.xlsx',
+        type=str,
+        help='path xlsx file'
+             '(default: ./train.xlsx)'
+    )
+    parser.add_argument(
+        '--path_xlsx_test',
+        metavar='DIR',
+        default='./test.xlsx',
+        type=str,
+        help='path xlsx file'
+             '(default: ./test.xlsx)'
+    )
     parser.add_argument(
         '--dst-data-path',
         metavar='DIR',

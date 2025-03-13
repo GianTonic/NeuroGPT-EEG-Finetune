@@ -43,10 +43,7 @@ class MotorImageryDataset(EEGDataset):
         print(f"data_all structure: {[type(item) for item in self.data_all]}")
         # print(f"Example data structure: {self.data_all[0]}")
 
-        self.mi_types = {769: 'left', 770: 'right', 771: 'foot', 772: 'tongue', 1023: 'rejected'}
-        self.labels_string2int = {'left': 0, 'right': 1, 'foot': 2, 'tongue': 3}
-        self.Fs = 250  # 250Hz from original paper
-
+        
         # Load transformation matrix and ensure correct shape
         self.P = np.load("../inputs/tMatrix_value.npy")
         if self.P.shape != (22, 22):
@@ -190,11 +187,13 @@ class EmotionDataset(EEGDataset):
         super().__init__(filenames, sample_keys, chunk_len, num_chunks, ovlp, root_path=root_path, gpt_only=gpt_only)
         self.chunk_len = chunk_len
         self.data_all = []
-        pruned_path = str("/home/insane/Scrivania/eremus_npz/")
-
+        pruned_path=root_path
+        print(num_chunks)
+        self.filenames=filenames
         sessions = getPrunedSessions(pruned_path)
         for subject_id in range(0,int(len(sessions)/2)):
             raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
+            raw.resample(sfreq=250, npad="auto")
             data, _ = raw[:]
             data_dict = {
                     's': data,
@@ -209,7 +208,6 @@ class EmotionDataset(EEGDataset):
 
     def __len__(self):
         total_len = sum(self.num_trials_per_sub)
-        print(f"Dataset length: {total_len}")
         return total_len
 
     def __getitem__(self, idx):
@@ -235,15 +233,15 @@ class EmotionDataset(EEGDataset):
     def get_trials_from_single_subj(self, sub_id):
         try:
             raw = self.data_all[sub_id]['s']  # (channels, time)
-            self.xlsx = pd.read_excel("../augmented_eremus.xlsx")
+            self.xlsx = pd.read_excel(str(self.filenames))
             filter = self.xlsx["subject_id"] == sub_id
             rows=self.xlsx.where(filter).dropna(thresh=1)
 
             # STO FILTRANDO TUTTE LE RIGHE DELL'EXCEL CHE NON SONO  _OT
-            pruned_path = str("/home/insane/Scrivania/eremus_npz/")
-            sessions = getPrunedSessions(pruned_path)
-            filter2 = rows["filename_pruned"] == sessions[sub(sub_id)]
-            rows=rows.where(filter2).dropna(thresh=1)
+            # pruned_path = self.root_path
+            # sessions = getPrunedSessions(pruned_path)
+            # filter2 = rows["filename_pruned"] == sessions[sub(sub_id)]
+            # rows=rows.where(filter2).dropna(thresh=1)
             # FINE SCHIFEZZA
 
             idxs=[]
@@ -264,22 +262,20 @@ class EmotionDataset(EEGDataset):
             i=0
             for j, _ in enumerate(idxs):
                 trial_start=int(rows.iloc[j,6])
-                trial_stop=trial_start+self.chunk_len
-
-                # Ensure valid interval
-                # if (trial_stop > max_trial) :
-                #     print(f"Invalid trial interval for trial {j}: start={trial_start}, stop={trial_stop}, max={max_trial}")
-                #     continue
-
-                # Extract trial data ensuring correct dimensions
-                trial = raw[:22, trial_start:trial_stop]
-                # Check if the trial data has valid length
-                if trial.shape[1] != self.chunk_len:
-                    print(f"Unexpected trial length for trial {j}, expected {self.chunk_len}, got {trial.shape[1]}")
-                    continue
-                classes.append(trial_labels[j])
-                trials.append(trial)
-                i=i+1
+                trial_stop=int(rows.iloc[j,7])
+                qty=int((trial_stop-trial_start)/self.chunk_len)
+                for k in range(0,qty):
+                    print("qty",qty,k)
+                    start=trial_start+k*self.chunk_len
+                    stop=start+self.chunk_len  
+                    trial = raw[:22, start:stop]
+                    # Check if the trial data has valid length
+                    if trial.shape[1] != self.chunk_len:
+                        print(f"Unexpected trial length for trial {j}, expected {self.chunk_len}, got {trial.shape[1]}")
+                        continue
+                    classes.append(trial_labels[j])
+                    trials.append(trial)
+                    i=i+1
 
             print(f"Total trials loaded from subject {sub_id}: {len(trials)}")
             
@@ -291,6 +287,45 @@ class EmotionDataset(EEGDataset):
             raise
 
    
+    def preprocess():
+        for subject_id in range(34):
+    # calculate subject statistics (on data)
+            mean, std, _, _, _ = pp.get_subject_stats(eeg_data, 
+                                                    subject_id, 
+                                                    pruned_eeg_root_dir=pruned_path+"/", 
+                                                    select_single_session=False, 
+                                                    return_ch_stats=False)
+
+            # preprocess personal session
+            SESSION_TYPE = 'personal'
+            print(f"Preprocessing personal session for subject {subject_id}...")                                          
+
+            # open raw file
+            raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
+            raw_data = raw.get_data()
+            raw_data = pp.interpolate(raw_data)
+
+            # compute Z-score over all the file
+            raw_data = pp.z_score_norm(raw_data, mean, std)
+
+            # write output
+            print(f"Saving output...") 
+            filename = output_dir/f"sub{str(subject_id)}.npz"
+            np.savez_compressed(filename, raw_data)
+            print(f"Saved at {filename}") 
+
+            # preprocess other session
+            SESSION_TYPE = 'other'
+            print(f"Preprocessing other session for subject {subject_id}...")    
+
+            # open raw file
+            raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub_ot(subject_id)], verbose=False)
+            raw_data = raw.get_data()
+            raw_data = pp.interpolate(raw_data)
+
+            # compute Z-score over all the file
+            raw_data = pp.z_score_norm(raw_data, mean, std)
+
     def get_trials_all(self):
         trials_all = []
         labels_all = []
