@@ -5,7 +5,7 @@ import numpy as np
 from batcher.base import EEGDataset
 from scipy.io import loadmat
 from scipy.signal import butter, filtfilt
-from eremus.eremus_utils import getPrunedSessions, sub
+from eremus.eremus_utils import getPrunedSessions, sub, sub_ot
 from eremus import gew
 import eremus.preprocessing.preprocessing as pp
 
@@ -183,18 +183,21 @@ class MotorImageryDataset(EEGDataset):
         return filtered_data
 
 class EmotionDataset(EEGDataset):
-    def __init__(self, filenames, sample_keys, chunk_len=500, num_chunks=10, ovlp=50, root_path="", gpt_only=True):
+    def __init__(self, filenames,type_ds, sample_keys, chunk_len=500, num_chunks=10, ovlp=50, root_path="", gpt_only=True):
         super().__init__(filenames, sample_keys, chunk_len, num_chunks, ovlp, root_path=root_path, gpt_only=gpt_only)
         self.chunk_len = chunk_len
         self.data_all = []
+        print("Tipo", type_ds)
         pruned_path=root_path
         print(num_chunks)
         self.filenames=filenames
+        self.xlsx = pd.read_excel(str(self.filenames))
         sessions = getPrunedSessions(pruned_path)
-        for subject_id in range(0,int(len(sessions)/2)):
-            raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
-            raw.resample(sfreq=250, npad="auto")
-            data, _ = raw[:]
+        length=int(len(sessions)/2)
+        for subject_id in range(0,length):
+            #raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
+            raw=self.preprocess(subject_id,type_ds,self.xlsx, pruned_path,sessions )
+            data= raw[:]
             data_dict = {
                     's': data,
             }
@@ -264,11 +267,11 @@ class EmotionDataset(EEGDataset):
                 trial_start=int(rows.iloc[j,6])
                 trial_stop=int(rows.iloc[j,7])
                 qty=int((trial_stop-trial_start)/self.chunk_len)
-                for k in range(0,qty):
+                for k in range(0,2):
                     print("qty",qty,k)
                     start=trial_start+k*self.chunk_len
                     stop=start+self.chunk_len  
-                    trial = raw[:22, start:stop]
+                    trial = raw[ [2, 31, 4, 29, 3, 30, 1, 9, 24, 8, 25, 12, 21, 16, 13, 20, 5, 28, 7, 26, 11, 22], start:stop]
                     # Check if the trial data has valid length
                     if trial.shape[1] != self.chunk_len:
                         print(f"Unexpected trial length for trial {j}, expected {self.chunk_len}, got {trial.shape[1]}")
@@ -287,44 +290,46 @@ class EmotionDataset(EEGDataset):
             raise
 
    
-    def preprocess():
-        for subject_id in range(34):
+    def preprocess(self,subject_id, type_ds, filenames,pruned_path,sessions ):
+
     # calculate subject statistics (on data)
-            mean, std, _, _, _ = pp.get_subject_stats(eeg_data, 
+            mean, std, _, _, _ = pp.get_subject_stats(filenames, 
                                                     subject_id, 
                                                     pruned_eeg_root_dir=pruned_path+"/", 
                                                     select_single_session=False, 
                                                     return_ch_stats=False)
-
+            if type_ds == "train":
             # preprocess personal session
-            SESSION_TYPE = 'personal'
-            print(f"Preprocessing personal session for subject {subject_id}...")                                          
+                SESSION_TYPE = 'personal'
+                print(f"Preprocessing personal session for subject {subject_id}...")                                          
 
-            # open raw file
-            raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
-            raw_data = raw.get_data()
-            raw_data = pp.interpolate(raw_data)
+                # open raw file
+                raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
+                raw_data = raw.get_data()
+                raw_data = pp.interpolate(raw_data)
 
-            # compute Z-score over all the file
-            raw_data = pp.z_score_norm(raw_data, mean, std)
+                # compute Z-score over all the file
+                raw_data = pp.z_score_norm(raw_data, mean, std)
+                new_raw = mne.io.RawArray(raw_data, raw.info.copy())
+                raw,_ =new_raw[:]
+                return raw
+                            # open raw file
+            if type_ds == "test":
+                SESSION_TYPE = 'other'
+                print(f"Preprocessing OTHER session for subject {subject_id}...")                                          
 
-            # write output
-            print(f"Saving output...") 
-            filename = output_dir/f"sub{str(subject_id)}.npz"
-            np.savez_compressed(filename, raw_data)
-            print(f"Saved at {filename}") 
+                raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub_ot(subject_id)], verbose=False)
+                raw_data = raw.get_data()
+                raw_data = pp.interpolate(raw_data)
+
+                # compute Z-score over all the file
+                raw_data = pp.z_score_norm(raw_data, mean, std)
+                new_raw = mne.io.RawArray(raw_data, raw.info.copy())
+                raw,_ =new_raw[:]
+                return raw
 
             # preprocess other session
-            SESSION_TYPE = 'other'
-            print(f"Preprocessing other session for subject {subject_id}...")    
-
-            # open raw file
-            raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub_ot(subject_id)], verbose=False)
-            raw_data = raw.get_data()
-            raw_data = pp.interpolate(raw_data)
-
-            # compute Z-score over all the file
-            raw_data = pp.z_score_norm(raw_data, mean, std)
+           
 
     def get_trials_all(self):
         trials_all = []

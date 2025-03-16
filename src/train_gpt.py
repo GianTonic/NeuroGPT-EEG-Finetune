@@ -147,13 +147,13 @@ def train(config: Dict=None) -> Trainer:
         if(config["dataset"]=="emotion"):
             path_xlsx_train=config["path_xlsx_train"]
             path_xlsx_test=config["path_xlsx_test"]
-            train_dataset = EmotionDataset(path_xlsx_train, sample_keys=[
+            train_dataset = EmotionDataset(path_xlsx_train, "train",sample_keys=[
                     'inputs',
                     'attention_mask'
                 ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
             # pdb.set_trace()
             
-            test_dataset = EmotionDataset(path_xlsx_test, sample_keys=[
+            test_dataset = EmotionDataset(path_xlsx_test, "test",sample_keys=[
                     'inputs',
                     'attention_mask'
                 ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
@@ -173,7 +173,7 @@ def train(config: Dict=None) -> Trainer:
                 ], chunk_len=config["chunk_len"], num_chunks=config["num_chunks"], ovlp=config["chunk_ovlp"], root_path=downstream_path, gpt_only= not config["use_encoder"])
 
         validation_dataset = test_dataset
-        test_dataset = train_dataset
+        #test_dataset = train_dataset
         
     else:
         root_path = config["train_data_path"]
