@@ -139,3 +139,4 @@ dmypy.json
 data/
 result/
 scripts/log/dst-0/model_final/model.safetensors
+scripts/results/models/upstream/dst-0/model_final/model.safetensors
