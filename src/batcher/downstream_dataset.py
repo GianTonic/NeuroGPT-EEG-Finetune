@@ -194,12 +194,15 @@ class EmotionDataset(EEGDataset):
         self.xlsx = pd.read_excel(str(self.filenames))
         sessions = getPrunedSessions(pruned_path)
         length=int(len(sessions)/2)
-        for subject_id in range(0,length):
+        for subject_id in range(0,33):
             #raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
-            raw=self.preprocess(subject_id,type_ds,self.xlsx, pruned_path,sessions )
-            data= raw[:]
+            raw_personal,raw_other =self.preprocess(subject_id,self.xlsx, pruned_path,sessions )
+            
+            data_personal= raw_personal[:]
+            data_other= raw_other[:]
             data_dict = {
-                    's': data,
+                    'personal': data_personal,
+                    'other': data_other
             }
             self.data_all.append(data_dict)
 
@@ -235,50 +238,46 @@ class EmotionDataset(EEGDataset):
 
     def get_trials_from_single_subj(self, sub_id):
         try:
-            raw = self.data_all[sub_id]['s']  # (channels, time)
+            raw_personal = self.data_all[sub_id]['personal']  
+            raw_other = self.data_all[sub_id]['other']
             self.xlsx = pd.read_excel(str(self.filenames))
             filter = self.xlsx["subject_id"] == sub_id
             rows=self.xlsx.where(filter).dropna(thresh=1)
 
-            # STO FILTRANDO TUTTE LE RIGHE DELL'EXCEL CHE NON SONO  _OT
-            # pruned_path = self.root_path
-            # sessions = getPrunedSessions(pruned_path)
-            # filter2 = rows["filename_pruned"] == sessions[sub(sub_id)]
-            # rows=rows.where(filter2).dropna(thresh=1)
-            # FINE SCHIFEZZA
 
-            idxs=[]
+            classes=[]
+            trials=[]
             for id in rows.iloc[:,0].index:
+                print(id, sub_id )
+                id=id
                 emotion=eval(self.xlsx.iloc[id,11])
                 if(emotion[0]==20 or emotion[0]==21):
                     continue
-                idxs.append(id)
-            emotions = self.xlsx.iloc[idxs,11]
+                
             
-            labels=[]
-            for emotion in emotions: 
-                labels.append(gew.gew_to_hldv4(eval(emotion)))
-            trial_labels=np.array(labels).squeeze()
-            
-            trials = []
-            classes = []
-            i=0
-            for j, _ in enumerate(idxs):
-                trial_start=int(rows.iloc[j,6])
-                trial_stop=int(rows.iloc[j,7])
+                trial_start=int(self.xlsx.iloc[id,6])
+                trial_stop=int(self.xlsx.iloc[id,7])
+                record_set=self.xlsx.iloc[id,4]
+
                 qty=int((trial_stop-trial_start)/self.chunk_len)
-                for k in range(0,2):
+                for k in range(0,qty):
                     print("qty",qty,k)
                     start=trial_start+k*self.chunk_len
                     stop=start+self.chunk_len  
-                    trial = raw[ [2, 31, 4, 29, 3, 30, 1, 9, 24, 8, 25, 12, 21, 16, 13, 20, 5, 28, 7, 26, 11, 22], start:stop]
+                    print(start,stop)
+                    if '_ot_' in record_set:
+                        trial = raw_other[ [2, 31, 4, 29, 3, 30, 1, 9, 24, 8, 25, 12, 21, 16, 13, 20, 5, 28, 7, 26, 11, 22], start:stop]
+                    else:
+                        trial = raw_personal[ [2, 31, 4, 29, 3, 30, 1, 9, 24, 8, 25, 12, 21, 16, 13, 20, 5, 28, 7, 26, 11, 22], start:stop]
+                        
                     # Check if the trial data has valid length
+                    
                     if trial.shape[1] != self.chunk_len:
-                        print(f"Unexpected trial length for trial {j}, expected {self.chunk_len}, got {trial.shape[1]}")
+                        print(f"Unexpected trial length for trial {id}, expected {self.chunk_len}, got {trial.shape[1]}")
                         continue
-                    classes.append(trial_labels[j])
+                    classes.append(gew.gew_to_hldv4(emotion))
                     trials.append(trial)
-                    i=i+1
+                    
 
             print(f"Total trials loaded from subject {sub_id}: {len(trials)}")
             
@@ -290,43 +289,44 @@ class EmotionDataset(EEGDataset):
             raise
 
    
-    def preprocess(self,subject_id, type_ds, filenames,pruned_path,sessions ):
+    def preprocess(self,subject_id, filenames,pruned_path,sessions ):
 
     # calculate subject statistics (on data)
+            
             mean, std, _, _, _ = pp.get_subject_stats(filenames, 
                                                     subject_id, 
                                                     pruned_eeg_root_dir=pruned_path+"/", 
                                                     select_single_session=False, 
                                                     return_ch_stats=False)
-            if type_ds == "train":
+            
             # preprocess personal session
-                SESSION_TYPE = 'personal'
-                print(f"Preprocessing personal session for subject {subject_id}...")                                          
+            SESSION_TYPE = 'personal'
+            print(f"Preprocessing personal session for subject {subject_id}...")                                          
 
-                # open raw file
-                raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
-                raw_data = raw.get_data()
-                raw_data = pp.interpolate(raw_data)
+            # open raw file
+            raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
+            raw_data = raw.get_data()
+            raw_data = pp.interpolate(raw_data)
 
-                # compute Z-score over all the file
-                raw_data = pp.z_score_norm(raw_data, mean, std)
-                new_raw = mne.io.RawArray(raw_data, raw.info.copy())
-                raw,_ =new_raw[:]
-                return raw
-                            # open raw file
-            if type_ds == "test":
-                SESSION_TYPE = 'other'
-                print(f"Preprocessing OTHER session for subject {subject_id}...")                                          
+            # compute Z-score over all the file
+            raw_data = pp.z_score_norm(raw_data, mean, std)
+            new_raw = mne.io.RawArray(raw_data, raw.info.copy())
+            raw_personal,_ =new_raw[:]
+            
+                        # open raw file
+        
+            SESSION_TYPE = 'other'
+            print(f"Preprocessing OTHER session for subject {subject_id}...")                                          
 
-                raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub_ot(subject_id)], verbose=False)
-                raw_data = raw.get_data()
-                raw_data = pp.interpolate(raw_data)
+            raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub_ot(subject_id)], verbose=False)
+            raw_data = raw.get_data()
+            raw_data = pp.interpolate(raw_data)
 
-                # compute Z-score over all the file
-                raw_data = pp.z_score_norm(raw_data, mean, std)
-                new_raw = mne.io.RawArray(raw_data, raw.info.copy())
-                raw,_ =new_raw[:]
-                return raw
+            # compute Z-score over all the file
+            raw_data = pp.z_score_norm(raw_data, mean, std)
+            new_raw = mne.io.RawArray(raw_data, raw.info.copy())
+            raw_other,_ =new_raw[:]
+            return raw_personal,raw_other
 
             # preprocess other session
            
