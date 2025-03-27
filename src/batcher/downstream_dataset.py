@@ -261,7 +261,7 @@ class EmotionDataset(EEGDataset):
 
                 qty=int((trial_stop-trial_start)/self.chunk_len)
                 for k in range(0,qty):
-                    print("qty",qty,k)
+                    
                     start=trial_start+k*self.chunk_len
                     stop=start+self.chunk_len  
                     print(start,stop)
