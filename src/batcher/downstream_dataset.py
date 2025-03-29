@@ -196,13 +196,16 @@ class EmotionDataset(EEGDataset):
         length=int(len(sessions)/2)
         for subject_id in range(0,33):
             #raw = mne.io.read_raw_eeglab(Path(pruned_path)/sessions[sub(subject_id)], verbose=False)
-            raw_personal,raw_other =self.preprocess(subject_id,self.xlsx, pruned_path,sessions )
+            raw_personal,raw_other, ch_mean, ch_std, ch_names = self.preprocess(subject_id,self.xlsx, pruned_path,sessions )
             
             data_personal= raw_personal[:]
             data_other= raw_other[:]
             data_dict = {
                     'personal': data_personal,
-                    'other': data_other
+                    'other': data_other,
+                    'ch_mean': ch_mean,
+                    'ch_std': ch_std,
+                    'ch_names': ch_names
             }
             self.data_all.append(data_dict)
 
@@ -293,11 +296,11 @@ class EmotionDataset(EEGDataset):
 
     # calculate subject statistics (on data)
             
-            mean, std, _, _, _ = pp.get_subject_stats(filenames, 
+            mean, std, ch_mean, ch_std, ch_names = pp.get_subject_stats(filenames, 
                                                     subject_id, 
                                                     pruned_eeg_root_dir=pruned_path+"/", 
                                                     select_single_session=False, 
-                                                    return_ch_stats=False)
+                                                    return_ch_stats=True)
             
             # preprocess personal session
             SESSION_TYPE = 'personal'
@@ -308,12 +311,18 @@ class EmotionDataset(EEGDataset):
             raw_data = raw.get_data()
             raw_data = pp.interpolate(raw_data)
 
-            # compute Z-score over all the file
-            raw_data = pp.z_score_norm(raw_data, mean, std)
-            new_raw = mne.io.RawArray(raw_data, raw.info.copy())
+            # Normalize each channel separately
+            normalized_data = np.zeros_like(raw_data)
+            for ch_idx in range(raw_data.shape[0]):
+                channel_data = raw_data[ch_idx]
+                channel_mean = np.mean(channel_data)
+                channel_std = np.std(channel_data)
+                normalized_data[ch_idx] = (channel_data - channel_mean) / channel_std
+            
+            new_raw = mne.io.RawArray(normalized_data, raw.info.copy())
             raw_personal,_ =new_raw[:]
             
-                        # open raw file
+            # open raw file
         
             SESSION_TYPE = 'other'
             print(f"Preprocessing OTHER session for subject {subject_id}...")                                          
@@ -322,14 +331,18 @@ class EmotionDataset(EEGDataset):
             raw_data = raw.get_data()
             raw_data = pp.interpolate(raw_data)
 
-            # compute Z-score over all the file
-            raw_data = pp.z_score_norm(raw_data, mean, std)
-            new_raw = mne.io.RawArray(raw_data, raw.info.copy())
+            # Normalize each channel separately
+            normalized_data = np.zeros_like(raw_data)
+            for ch_idx in range(raw_data.shape[0]):
+                channel_data = raw_data[ch_idx]
+                channel_mean = np.mean(channel_data)
+                channel_std = np.std(channel_data)
+                normalized_data[ch_idx] = (channel_data - channel_mean) / channel_std
+            
+            new_raw = mne.io.RawArray(normalized_data, raw.info.copy())
             raw_other,_ =new_raw[:]
-            return raw_personal,raw_other
-
-            # preprocess other session
-           
+            
+            return raw_personal, raw_other, ch_mean, ch_std, ch_names
 
     def get_trials_all(self):
         trials_all = []

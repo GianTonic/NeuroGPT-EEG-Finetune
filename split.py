@@ -7,12 +7,11 @@ def split_excel_file(input_file, output_prefix="split", random_split=False,
                      first_output=None, second_output=None, split_percentage=80):
     """
     Divide un file Excel in due parti secondo la percentuale specificata.
-    Permuta sempre in modo casuale le righe prima della divisione.
     
     Args:
         input_file (str): Percorso al file Excel da dividere
         output_prefix (str): Prefisso per i file di output
-        random_split (bool): Parametro mantenuto per retrocompatibilità (non ha effetto)
+        random_split (bool): Se True, divide casualmente invece che sequenzialmente
         first_output (str): Nome personalizzato per il primo file di output
         second_output (str): Nome personalizzato per il secondo file di output
         split_percentage (int): Percentuale per la prima parte (default: 80%)
@@ -29,12 +28,13 @@ def split_excel_file(input_file, output_prefix="split", random_split=False,
         total_rows = len(df)
         print(f"Totale righe nel file: {total_rows}")
         
-        # Permuta sempre casualmente le righe
-        print("Permutazione casuale delle righe...")
-        df = df.sample(frac=1, random_state=42).reset_index(drop=True)
-        
         # Calcola il punto di divisione basato sulla percentuale
         split_point = int(total_rows * split_percentage / 100)
+        
+        if random_split:
+            # Divisione casuale
+            print("Esecuzione divisione casuale...")
+            df = df.sample(frac=1).reset_index(drop=True)
         
         # Dividi il dataframe
         first_part = df.iloc[:split_point].copy()
@@ -79,7 +79,7 @@ def main():
     parser = argparse.ArgumentParser(description='Divide un file Excel in due parti secondo una percentuale specificata.')
     parser.add_argument('input_file', help='Percorso al file Excel da dividere')
     parser.add_argument('--prefix', default='split', help='Prefisso per i file di output')
-    parser.add_argument('--random', action='store_true', help='Parametro mantenuto per retrocompatibilità (non ha effetto)')
+    parser.add_argument('--random', action='store_true', help='Effettua una divisione casuale')
     parser.add_argument('--output1', help='Nome personalizzato per il primo file di output')
     parser.add_argument('--output2', help='Nome personalizzato per il secondo file di output')
     parser.add_argument('--percentage', type=int, default=80, help='Percentuale per la prima parte (default: 80)')
