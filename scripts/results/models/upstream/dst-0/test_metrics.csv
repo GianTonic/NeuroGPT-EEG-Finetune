@@ -1,2 +1,2 @@
 test_loss,test_accuracy,test_runtime,test_samples_per_second,test_steps_per_second
-1.316315770149231,0.405,35.7879,375.267,23.472
+1.1806329488754272,0.474,15.8526,338.367,21.195
