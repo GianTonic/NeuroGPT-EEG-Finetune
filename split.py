@@ -4,7 +4,8 @@ import os
 import sys
 
 def split_excel_file(input_file, output_prefix="split", random_split=False, 
-                     first_output=None, second_output=None, split_percentage=80):
+                     first_output=None, second_output=None, split_percentage=80,
+                     permute_rows=False):
     """
     Divide un file Excel in due parti secondo la percentuale specificata.
     
@@ -15,6 +16,7 @@ def split_excel_file(input_file, output_prefix="split", random_split=False,
         first_output (str): Nome personalizzato per il primo file di output
         second_output (str): Nome personalizzato per il secondo file di output
         split_percentage (int): Percentuale per la prima parte (default: 80%)
+        permute_rows (bool): Se True, permuta le righe prima della divisione
     
     Returns:
         tuple: Percorsi dei due file creati
@@ -27,6 +29,11 @@ def split_excel_file(input_file, output_prefix="split", random_split=False,
         # Ottieni le informazioni sul file
         total_rows = len(df)
         print(f"Totale righe nel file: {total_rows}")
+        
+        # Permuta le righe se richiesto
+        if permute_rows:
+            print("Permutazione delle righe...")
+            df = df.sample(frac=1).reset_index(drop=True)
         
         # Calcola il punto di divisione basato sulla percentuale
         split_point = int(total_rows * split_percentage / 100)
@@ -80,6 +87,7 @@ def main():
     parser.add_argument('input_file', help='Percorso al file Excel da dividere')
     parser.add_argument('--prefix', default='split', help='Prefisso per i file di output')
     parser.add_argument('--random', action='store_true', help='Effettua una divisione casuale')
+    parser.add_argument('--permute', action='store_true', help='Permuta le righe prima della divisione')
     parser.add_argument('--output1', help='Nome personalizzato per il primo file di output')
     parser.add_argument('--output2', help='Nome personalizzato per il secondo file di output')
     parser.add_argument('--percentage', type=int, default=80, help='Percentuale per la prima parte (default: 80)')
@@ -88,7 +96,7 @@ def main():
     args = parser.parse_args()
     
     # Esegui la divisione
-    split_excel_file(args.input_file, args.prefix, args.random, args.output1, args.output2, args.percentage)
+    split_excel_file(args.input_file, args.prefix, args.random, args.output1, args.output2, args.percentage, args.permute)
 
 if __name__ == "__main__":
     main()

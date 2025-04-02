@@ -267,7 +267,7 @@ class EmotionDataset(EEGDataset):
                     
                     start=trial_start+k*self.chunk_len
                     stop=start+self.chunk_len  
-                    print(start,stop)
+                    # print(start,stop)
                     if '_ot_' in record_set:
                         trial = raw_other[ [2, 31, 4, 29, 3, 30, 1, 9, 24, 8, 25, 12, 21, 16, 13, 20, 5, 28, 7, 26, 11, 22], start:stop]
                     else:
